@@ -1,0 +1,41 @@
+#!/usr/local/bin/python3
+
+from datetime import datetime
+
+def parse_event_data(line):
+    words = line.split(" ")
+    if words[2] is "Guard":
+        return {
+            "type": "shift",
+            "guard_id": int(words[3][1:])
+        }
+    elif words[2] is "falls":
+        return {
+            "type": "sleep"
+        }
+    else:
+        return {
+            "type": "wake"
+        }
+
+def parse_guard_events(lines):
+    def parse_event(line):
+        evt_data = parse_event_data(line)
+        evt = {
+            "datetime": datetime.strptime(line[1:17], "%Y-%m-%d %H:%M"),
+            **evt_data
+        }
+        return evt
+
+    return sorted(list(map(parse_event, lines)), key=lambda x: x["datetime"].timestamp())
+
+def part_1(guard_events):
+    print("{}".format(guard_events[1]))
+
+def main():
+    with open("./day4.txt") as lines:
+        guard_events = parse_guard_events(lines)
+        part_1(guard_events)
+
+if __name__ == "__main__":
+    main()
