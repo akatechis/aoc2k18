@@ -1,34 +1,21 @@
-from datetime import datetime
-
-
-def parse_event_data(line):
-    words = line.strip().split(" ")
-    if words[2] == "wake":
-        return {
-            "type": "wake"
-        }
-    elif words[2] == "sleep":
-        return {
-            "type": "sleep"
-        }
-    else:
-        return {
-            "type": "shift",
-            "guard_id": int(words[2])
-        }
-
-
 def parse_guard_events(lines):
     def parse_event(line):
-        evt_data = parse_event_data(line)
-        evt = {
-            "datetime": datetime.strptime(line[:16], "%Y-%m-%d %H:%M"),
-            **evt_data
-        }
+        dt = line[:16]
+        timestamp = int(dt[:16].replace("-","").replace(" ","").replace(":",""))
+        evt = { "timestamp": timestamp, "minutes": int(dt[14:16]) }
+        words = line.strip().split(" ")
+        if words[2] == "wake":
+            evt["type"] = "wake"
+        elif words[2] == "sleep":
+            evt["type"] = "sleep"
+        else:
+            evt["type"] = "shift"
+            evt["guard_id"] = int(words[2])
+
         return evt
 
     ev = list(map(parse_event, lines))
-    return sorted(ev, key=lambda x: x["datetime"].timestamp())
+    return sorted(ev, key=lambda x: x["timestamp"])
 
 
 def aggregate_guard_stats(guard_events):
@@ -48,9 +35,9 @@ def aggregate_guard_stats(guard_events):
             else:
                 guard = stats[guard_id]
         elif ev["type"] == "sleep":
-            start_minute = ev["datetime"].time().minute
+            start_minute = ev["minutes"]
         else:
-            end_minute = ev["datetime"].time().minute
+            end_minute = ev["minutes"]
             for minute in range(start_minute, end_minute):
                 guard["total_slept"] += 1
                 if minute not in guard["sleep_breakdown"]:
@@ -67,10 +54,7 @@ def find_laziest_guard(guard_stats):
 
 def find_favorite_minute(guard_stat):
     tbl = guard_stat["sleep_breakdown"]
-    if tbl:
-        return max(tbl, key=lambda m: tbl[m])
-    else:
-        return 0
+    return max(tbl, key=lambda m: tbl[m])
 
 
 def part_1(guard_events):
@@ -81,15 +65,20 @@ def part_1(guard_events):
 
 
 def find_most_predictable_guard(guard_stats):
-    pred_id = max(guard_stats, key=lambda g: find_favorite_minute(guard_stats[g]))
-    return guard_stats[pred_id]
+    all_minutes = {}
+    for guard in guard_stats.values():
+        guard_id = guard["guard_id"]
+        for minute in guard["sleep_breakdown"]:
+            key = "{}-{}".format(guard_id, minute)
+            all_minutes[key] = guard["sleep_breakdown"][minute]
+    p = max(all_minutes, key=lambda k: all_minutes[k]).split("-")
+    return (int(p[0]), int(p[1]))
 
 
 def part_2(guard_events):
     guard_stats = aggregate_guard_stats(guard_events)
-    predictable = find_most_predictable_guard(guard_stats)
-    best_minute = find_favorite_minute(predictable)
-    print("Predictable guard = {}".format(predictable["guard_id"] * best_minute))
+    (guard_id, fav_minute) = find_most_predictable_guard(guard_stats)
+    print("Predictable guard = {}".format(guard_id * fav_minute))
 
 
 def main():

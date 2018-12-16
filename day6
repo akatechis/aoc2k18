@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+
+
+from itertools import starmap, repeat
+from dataclasses import dataclass
+from multiprocessing import Pool
+
+
+@dataclass
+class Location:
+    x: int
+    y: int
+    key: str
+
+
+def main():
+    with open("./day6.txt") as lines:
+        # with open("./day6test.txt") as lines:
+        locations = list(starmap(parse_location, enumerate(lines)))
+        part_1(locations)
+        part_2(locations)
+
+
+def parse_location(idx, str):
+    tok = str.strip().split(", ")
+    return Location(x=int(tok[0]), y=int(tok[1]), key=chr(idx + 65))
+
+
+def measure_terrain(locations):
+    max_x = max(locations, key=lambda k: k.x).x + 1
+    max_y = max(locations, key=lambda k: k.y).y + 1
+    return (max_x, max_y)
+
+
+def manhattan_distance(a, b):
+    (a_x, a_y), (b_x, b_y) = a, b
+    return abs(b_x - a_x) + abs(b_y - a_y)
+
+
+def claim_locations(locations, w, h):
+    chart = {}
+    pool = Pool(8)
+    for x in range(w + 1):
+        for y in range(h + 1):
+            key = (x, y)
+            dists = compute_distances(pool, key, locations)
+            nearest_loc = min(dists, key=lambda k: dists[k])
+            if list(dists.values()).count(dists[nearest_loc]) > 1:
+                chart[key] = "."
+            else:
+                chart[key] = nearest_loc
+    return chart
+
+
+def compute_worker(point, location):
+    return (location.key, manhattan_distance(point, (location.x, location.y)))
+
+
+def compute_distances(pool, point, locations):
+    dists = pool.starmap(compute_worker, zip(
+        repeat(point, len(locations)), locations))
+    return dict(dists)
+
+
+def largest_finite_region(chart, locations, w, h):
+    infinites = []
+    for x in range(w + 1):
+        a = (x, 0)
+        b = (x, h)
+        if chart[a] != ".":
+            infinites.append(chart[a])
+        if chart[b] != ".":
+            infinites.append(chart[b])
+    for y in range(h + 1):
+        a = (0, y)
+        b = (w, y)
+        if chart[a] != ".":
+            infinites.append(chart[a])
+        if chart[b] != ".":
+            infinites.append(chart[b])
+    max_key = None
+    max_count = float("-inf")
+    for loc in filter(lambda l: l.key not in infinites, locations):
+        count = list(chart.values()).count(loc.key)
+        if count > max_count:
+            max_count = count
+            max_key = loc.key
+    return (max_key, max_count)
+
+
+def part_1(locations):
+    (w, h) = measure_terrain(locations)
+    chart = claim_locations(locations, w, h)
+    answer = largest_finite_region(chart, locations, w, h)
+    print("The largest region is {} with {} tiles".format(
+        answer[0], answer[1]))
+
+
+def sum_distances(locations, w, h, max):
+    size = 0
+    pool = Pool(8)
+    for x in range(w + 1):
+        for y in range(h + 1):
+            key = (x, y)
+            dists = compute_distances(pool, key, locations)
+            total = sum(list(dists.values()))
+            if total < max:
+                size += 1
+    return size
+
+
+def part_2(locations):
+    (w, h) = measure_terrain(locations)
+    size = sum_distances(locations, w, h, 10000)
+    print("Region size = {}".format(size))
+
+
+def preview_chart(locations, chart, w, h):
+    for y in range(h + 1):
+        for x in range(w + 1):
+            key = (x, y)
+            val = chart[key]
+            print("{} ".format(val), end="")
+        print()
+
+
+if __name__ == "__main__":
+    main()

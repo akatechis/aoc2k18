@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+
+from multiprocessing import Pool
+from itertools import repeat
+
+
 def reduce_polymer(polymer):
     while True:
         length = len(polymer)
@@ -23,7 +29,7 @@ def part_1(polymer):
 def part_2(polymer):
     min_char = None
     min_len = len(polymer)
-    for code in range(ord("a"), ord("z")):
+    for code in range(ord("a"), ord("z") + 1):
         ch = chr(code)
         material = list(filter(lambda c: c.lower() != ch, polymer))
         if len(material) != len(polymer):
@@ -36,14 +42,38 @@ def part_2(polymer):
     print("Length of yielded polymer = {}".format(min_len))
 
 
+def experiment_worker(polymer, candidate):
+    u_candidate = candidate.upper()
+    has_candidate = candidate in polymer or u_candidate in polymer
+    if has_candidate:
+        def predicate(c): return c != candidate and c != u_candidate
+        material = list(filter(predicate, polymer))
+        reduce_polymer(material)
+        return (candidate, len(material))
+    else:
+        return (candidate, len(polymer))
+
+
+def part_2_parallel(polymer):
+    experiments = zip(
+        repeat(polymer, ord("z") - ord("a") + 1),
+        map(lambda c: chr(c), range(ord("a"), ord("z") + 1))
+    )
+    with Pool(16) as pool:
+        results = pool.starmap(experiment_worker, experiments)
+        (min_char, min_len) = min(results, key=lambda p: p[1])
+        print("Character with best yield = {}".format(min_char))
+        print("Length of yielded polymer = {}".format(min_len))
+
+
 def main():
     with open("day5.txt") as data:
         polymer = list(list(data)[0])
         # polymer = list("dabAcCaCBAcCcaDA")
         part_1(polymer.copy())
-        part_2(polymer.copy())
+        # part_2(polymer.copy())
+        part_2_parallel(polymer.copy())
 
 
 if __name__ == '__main__':
     main()
-
