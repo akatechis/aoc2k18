@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+
+# for real data, 60 seconds + name
+# TIME_OFFSET = -4
+
+# for test data, a = 1 second, b = 2 seconds, etc
+TIME_OFFSET = -64
+
+
+class WorkerState:
+    def __init__(self):
+        self.step = None
+        self.seconds = 0
+
+
+    def start_step(self, step):
+        self.step = step
+        self.seconds = 0
+
+
+    def clear_step(self):
+        self.step = None
+        self.seconds = 0
+
+
+    def tick(self):
+        if self.step:
+            self.seconds += 1
+
+
+    def available(self):
+        return self.step == None or self.step.time == self.seconds
+
+
+class Step:
+    def __init__(self, name):
+        self.name = name
+        self.time = ord(name) + TIME_OFFSET
+        self.deps = []
+
+
+    def add_dep(self, name):
+        self.deps.append(name)
+
+
+    def __repr__(self):
+        return "<Step {}, deps: {}>".format(self.name, self.deps)
+
+
+def parse_steps(lines):
+    steps = {}
+    for ln in lines:
+        tok = ln.split(" ")
+        dep = tok[1]
+        name = tok[7]
+
+        if name not in steps:
+            steps[name] = Step(name)
+        if dep not in steps:
+            steps[dep] = Step(dep)
+
+        step = steps[name]
+        if dep not in step.deps:
+            step.add_dep(dep)
+    return sorted(steps.values(), key = lambda s: s.name)
+
+
+def choose_next_step(seq, steps):
+    for st in steps:
+        if st.name not in seq and all(map(lambda d: d in seq, st.deps)):
+            return st.name
+
+
+def resolve_dependencies(steps):
+    seq = []
+    while len(seq) != len(steps):
+        next_step = choose_next_step(seq, steps)
+        if next_step:
+            seq.append(next_step)
+        else:
+            break
+    return seq
+
+
+def part_1(steps):
+    seq = resolve_dependencies(steps)
+    print("".join(seq))
+
+
+def select_idle_workers(workers):
+    return list(filter(lambda w: w.available(), workers))
+
+
+def find(fn, lst):
+    for item in lst:
+        if fn(item):
+            return item
+
+
+def select_ready_steps(seq, done, steps, idle_workers):
+    ready = []
+    for _ in range(idle_workers):
+        if bool(seq):
+            candidate = find(lambda s: s.name == seq[0], steps)
+            if all(map(lambda d: d in done, candidate.deps)):
+                seq.pop(0)
+                ready.append(candidate)
+            else:
+                return ready
+    return ready
+
+
+def count_time_to_complete(seq, steps, worker_count):
+    print("Second   Worker 1   Worker 2   Done")
+    seconds = 0
+    done = []
+    workers = [WorkerState() for _ in range(worker_count)]
+
+    idle_workers = select_idle_workers(workers)
+    available_steps = select_ready_steps(seq, done, steps, len(idle_workers))
+    for st in available_steps:
+        wk = idle_workers.pop(0)
+        wk.start_step(st)
+
+    while True:
+        preview_progress(seconds, workers, done)
+        idle_workers = select_idle_workers(workers)
+        for wk in idle_workers:
+            if wk.step:
+                done.append(wk.step.name)
+                wk.clear_step()
+
+        available_steps = select_ready_steps(seq, done, steps, len(idle_workers))
+
+        # assign all steps to workers
+        for st in available_steps:
+            next_wk = idle_workers.pop(0)
+            next_wk.start_step(st)
+
+        # all workers do 1 second of work
+        for wk in workers:
+            wk.tick()
+
+        if len(done) == len(steps):
+            break
+        else:
+            seconds += 1
+    return seconds
+
+
+def part_2(steps):
+    seq = resolve_dependencies(steps)
+    seconds = count_time_to_complete(seq, steps, 2)
+    print("The sequence was built in {} seconds".format(seconds))
+
+
+def main():
+    with open("./test7.txt") as lines:
+        steps = parse_steps(list(lines))
+        part_1(steps)
+        part_2(steps)
+
+
+def preview_progress(seconds, workers, done):
+    [w1, w2] = workers
+    [s1, s2] = w1.step, w2.step
+    n1 = "."
+    n2 = "."
+    if s1:
+        n1 = s1.name
+    if s2:
+        n2 = s2.name
+    dn = "".join(done)
+    print(" {}         {}         {}      {}".format(seconds, n1, n2, dn))
+
+
+if __name__ == "__main__":
+    main()
+
