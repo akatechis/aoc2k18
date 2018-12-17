@@ -18,14 +18,11 @@ class WorkerState:
         self.seconds = 0
 
 
-    def clear_step(self):
-        self.step = None
-        self.seconds = 0
-
-
     def tick(self):
         if self.step:
             self.seconds += 1
+            if self.seconds == self.step.time:
+                return self.step.name
 
 
     def available(self):
@@ -97,17 +94,12 @@ def find(fn, lst):
             return item
 
 
-def select_ready_steps(seq, done, steps, idle_workers):
-    ready = []
-    for _ in range(idle_workers):
-        if bool(seq):
-            candidate = find(lambda s: s.name == seq[0], steps)
-            if all(map(lambda d: d in done, candidate.deps)):
-                seq.pop(0)
-                ready.append(candidate)
-            else:
-                return ready
-    return ready
+def select_next_available_step(seq, done, steps):
+    if bool(seq):
+        candidate = find(lambda s: s.name == seq[0], steps)
+        if all(map(lambda d: d in done, candidate.deps)):
+            seq.pop(0)
+            return candidate
 
 
 def count_time_to_complete(seq, steps, worker_count):
@@ -116,31 +108,23 @@ def count_time_to_complete(seq, steps, worker_count):
     done = []
     workers = [WorkerState() for _ in range(worker_count)]
 
-    idle_workers = select_idle_workers(workers)
-    available_steps = select_ready_steps(seq, done, steps, len(idle_workers))
-    for st in available_steps:
-        wk = idle_workers.pop(0)
-        wk.start_step(st)
-
     while True:
-        preview_progress(seconds, workers, done)
-        idle_workers = select_idle_workers(workers)
-        for wk in idle_workers:
-            if wk.step:
-                done.append(wk.step.name)
-                wk.clear_step()
 
-        available_steps = select_ready_steps(seq, done, steps, len(idle_workers))
-
-        # assign all steps to workers
-        for st in available_steps:
-            next_wk = idle_workers.pop(0)
-            next_wk.start_step(st)
-
-        # all workers do 1 second of work
         for wk in workers:
-            wk.tick()
+            if wk.available():
+                next_step = select_next_available_step(seq, done, steps)
+                if next_step:
+                    wk.start_step(next_step)
 
+            completed = wk.tick()
+
+            if completed:
+                done.append(completed)
+                next_step = select_next_available_step(seq, done, steps)
+                if next_step:
+                    wk.start_step(next_step)
+
+        preview_progress(seconds, workers, done)
         if len(done) == len(steps):
             break
         else:
