@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 # for real data, 60 seconds + name
-# TIME_OFFSET = -4
+TIME_OFFSET = -4
 
 # for test data, a = 1 second, b = 2 seconds, etc
-TIME_OFFSET = -64
+# TIME_OFFSET = -64
 
 
 class WorkerState:
@@ -12,11 +12,9 @@ class WorkerState:
         self.step = None
         self.seconds = 0
 
-
     def start_step(self, step):
         self.step = step
         self.seconds = 0
-
 
     def tick(self):
         if self.step:
@@ -24,9 +22,11 @@ class WorkerState:
             if self.seconds == self.step.time:
                 return self.step.name
 
-
     def available(self):
-        return self.step == None or self.step.time == self.seconds
+        return self.step is None or self.step.time == self.seconds
+
+    def done(self):
+        return self.step and self.step.time == self.seconds
 
 
 class Step:
@@ -35,10 +35,8 @@ class Step:
         self.time = ord(name) + TIME_OFFSET
         self.deps = []
 
-
     def add_dep(self, name):
         self.deps.append(name)
-
 
     def __repr__(self):
         return "<Step {}, deps: {}>".format(self.name, self.deps)
@@ -59,7 +57,7 @@ def parse_steps(lines):
         step = steps[name]
         if dep not in step.deps:
             step.add_dep(dep)
-    return sorted(steps.values(), key = lambda s: s.name)
+    return sorted(steps.values(), key=lambda s: s.name)
 
 
 def choose_next_step(seq, steps):
@@ -94,38 +92,34 @@ def find(fn, lst):
             return item
 
 
-def select_next_available_step(seq, done, steps):
-    if bool(seq):
-        candidate = find(lambda s: s.name == seq[0], steps)
-        if all(map(lambda d: d in done, candidate.deps)):
-            seq.pop(0)
-            return candidate
+def select_next_available_step(done, steps):
+    def dep_done(d): return d in done
+    for (i, st) in enumerate(steps):
+        if all(map(dep_done, st.deps)) and st.name not in done:
+            steps.pop(i)
+            return st
 
 
-def count_time_to_complete(seq, steps, worker_count):
-    print("Second   Worker 1   Worker 2   Done")
-    seconds = 0
+def count_time_to_complete(steps, worker_count):
     done = []
+    seconds = 0
     workers = [WorkerState() for _ in range(worker_count)]
+    total_steps = len(steps)
 
     while True:
-
         for wk in workers:
+            if wk.done():
+                done.append(wk.step.name)
             if wk.available():
-                next_step = select_next_available_step(seq, done, steps)
+                next_step = select_next_available_step(done, steps)
                 if next_step:
                     wk.start_step(next_step)
 
-            completed = wk.tick()
-
-            if completed:
-                done.append(completed)
-                next_step = select_next_available_step(seq, done, steps)
-                if next_step:
-                    wk.start_step(next_step)
+            wk.tick()
 
         preview_progress(seconds, workers, done)
-        if len(done) == len(steps):
+
+        if len(done) == total_steps:
             break
         else:
             seconds += 1
@@ -133,31 +127,39 @@ def count_time_to_complete(seq, steps, worker_count):
 
 
 def part_2(steps):
-    seq = resolve_dependencies(steps)
-    seconds = count_time_to_complete(seq, steps, 2)
+    steps = sorted(steps, key=lambda s: s.name)
+    seconds = count_time_to_complete(steps, 5)
     print("The sequence was built in {} seconds".format(seconds))
 
 
 def main():
-    with open("./test7.txt") as lines:
+    with open("./day7.txt") as lines:
         steps = parse_steps(list(lines))
         part_1(steps)
         part_2(steps)
 
 
 def preview_progress(seconds, workers, done):
-    [w1, w2] = workers
-    [s1, s2] = w1.step, w2.step
+    [w1, w2, w3, w4, w5] = workers
+    [s1, s2, s3, s4, s5] = w1.step, w2.step, w3.step, w4.step, w5.step
     n1 = "."
     n2 = "."
-    if s1:
+    n3 = "."
+    n4 = "."
+    n5 = "."
+    if s1 and w1.seconds < s1.time:
         n1 = s1.name
-    if s2:
+    if s2 and w2.seconds < s2.time:
         n2 = s2.name
+    if s3 and w3.seconds < s3.time:
+        n2 = s3.name
+    if s4 and w4.seconds < s4.time:
+        n2 = s4.name
+    if s5 and w5.seconds < s5.time:
+        n2 = s5.name
     dn = "".join(done)
-    print(" {}         {}         {}      {}".format(seconds, n1, n2, dn))
+    print(" {}         {}         {}         {}         {}         {}      {}".format(seconds, n1, n2, n3, n4, n5, dn))
 
 
 if __name__ == "__main__":
     main()
-
